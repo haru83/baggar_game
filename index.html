@@ -1,71 +1,42 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>ウェブ乞食 - ホームレス育成</title>
+    <title>Web Beggar - 거지 키우기</title>
     <style>
-        /* 반응형 문제 해결을 위한 최종 CSS 수정 */
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden; /* 스크롤바 방지 */
-            background: linear-gradient(180deg, #4a4a6a 0%, #2a2a3a 100%);
-            font-family: 'Meiryo', 'Hiragino Kaku Gothic ProN', 'MS PGothic', sans-serif;
-            color: #fff;
-        }
         body {
             display: flex;
             justify-content: center;
             align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #333;
+            font-family: 'Malgun Gothic', sans-serif;
+            color: #fff;
         }
         #game-container {
-            width: 100%;
-            height: 100%;
-            max-width: 420px;
-            max-height: 100vh; /* 뷰포트 전체 높이를 사용하도록 변경 */
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            /* 하단에 추가적인 여백을 주기 위해 padding-bottom 값을 늘립니다. */
-            padding: 10px 10px 20px 10px;
-            box-sizing: border-box; /* 패딩이 크기에 포함되도록 설정 */
-        }
-        h1 {
-            flex-shrink: 0; /* 높이가 줄어들지 않도록 설정 */
-            margin: 0 0 10px 0; /* 하단 마진만 설정 */
-            color: #f0e6d2;
-            text-shadow: 0 0 10px #ffc107;
-            font-size: clamp(1.5rem, 4vw, 2rem); /* 화면 크기에 따른 폰트 크기 조절 */
+            text-align: center;
         }
         canvas {
-            /* 가장 확실한 반응형 로직 */
-            max-width: 100%;
-            /* 컨테이너의 남은 공간을 모두 차지하도록 설정 */
-            max-height: 100%; 
-            aspect-ratio: 400 / 700;
-            
-            /* width: 100%를 제거하여 높이가 제한될 때 너비가 줄어들도록 함 */
-            
-            border: 3px solid #f0e6d2;
-            border-radius: 15px;
-            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+            border: 2px solid #555;
+            background-color: #f0e6d2;
             cursor: pointer;
+        }
+        h1 {
+            color: #f0e6d2;
         }
     </style>
 </head>
 <body>
     <div id="game-container">
-        <h1>ウェブ乞食</h1>
+        <h1>Web Beggar</h1>
         <canvas id="gameCanvas" width="400" height="700"></canvas>
     </div>
 
 <script>
 // =================================================================
-// STEP 1: ゲームの初期設定と状態管理
+// STEP 1: 게임 초기 설정 및 상태 관리
+// 기획서의 핵심 기능들을 구현하기 위한 기본 변수와 게임 상태를 설정합니다.
 // =================================================================
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -75,547 +46,339 @@ let gameState = {
     goldPerClick: 1,
     goldPerSecond: 0,
     ceoLevel: 1,
-    albas: [],
-    assets: [],
-    currentScreen: 'main',
-    floatingTexts: [],
-    particles: [],
-    randomItems: [],
-    // 리셋 확인 창 상태 추가
-    showResetConfirm: false,
-    characterAnimation: {
-        isAnimating: false,
-        duration: 0,
-        maxDuration: 15
-    },
+    albas:, // { id, level }
+    assets:, // { id, purchasePrice, currentValue }
+    currentScreen: 'main', // main, ceo, alba, asset
     lastUpdate: Date.now()
 };
 
 // =================================================================
-// STEP 2: ゲームバランスデータの定義 (変更なし)
+// STEP 2: 게임 밸런싱 데이터 정의
+// 기획서의 표를 바탕으로 게임의 핵심 수치를 설정합니다.
 // =================================================================
 
-const CEO_CONFIG = { baseCost: 10, costMultiplier: 1.07, powerPerLevel: 1 };
+const CEO_CONFIG = {
+    baseCost: 10,
+    costMultiplier: 1.07,
+    powerPerLevel: 1
+};
+
 const ALBA_DATA = [
-    { id: 0, name: 'ファッショニスタ', baseCost: 500, baseGps: 5, costMultiplier: 1.08 },
-    { id: 1, name: 'ロッカー', baseCost: 10000, baseGps: 60, costMultiplier: 1.09 },
-    { id: 2, name: '画家', baseCost: 200000, baseGps: 550, costMultiplier: 1.10 },
-    { id: 3, name: 'ピアニスト', baseCost: 4000000, baseGps: 4800, costMultiplier: 1.11 },
-    { id: 4, name: '科学者', baseCost: 160000000, baseGps: 61000, costMultiplier: 1.13 }
-];
-const ASSET_DATA = [
-    { id: 0, name: '半地下住宅', price: 10000000, valueIncreaseRate: 0.001 },
-    { id: 1, name: '30坪アパート', price: 500000000, valueIncreaseRate: 0.001 },
-    { id: 2, name: '20階建てビル', price: 10000000000, valueIncreaseRate: 0.0008 },
-    { id: 3, name: '50階建てビル', price: 100000000000, valueIncreaseRate: 0.0007 },
-    { id: 4, name: 'ネイバー本社', price: 5000000000000, valueIncreaseRate: 0.0006 }
+    { id: 0, name: '패셔니스타', baseCost: 500, baseGps: 5, costMultiplier: 1.08 },
+    { id: 1, name: '롹커', baseCost: 10000, baseGps: 60, costMultiplier: 1.09 },
+    { id: 2, name: '화가', baseCost: 200000, baseGps: 550, costMultiplier: 1.10 },
+    { id: 3, name: '피아니스트', baseCost: 4000000, baseGps: 4800, costMultiplier: 1.11 },
+    { id: 4, name: '과학자', baseCost: 160000000, baseGps: 610000, costMultiplier: 1.13 }
 ];
 
+const ASSET_DATA =;
+
+
 // =================================================================
-// STEP 3: ユーティリティ関数 (変更なし)
+// STEP 3: 핵심 유틸리티 함수
+// 게임 전반에 사용될 보조 함수들을 정의합니다. (숫자 포맷팅 등)
 // =================================================================
 
 function formatNumber(num) {
     num = Math.floor(num);
     if (num < 10000) return num.toLocaleString();
-    const units = ['', '万', '億', '兆', '京'];
+    const units = ['', '만', '억', '조', '경'];
     let unitIndex = 0;
-    let displayNum = num;
-    while (displayNum >= 10000 && unitIndex < units.length - 1) {
-        displayNum /= 10000;
+    while (num >= 10000 && unitIndex < units.length - 1) {
+        num /= 10000;
         unitIndex++;
     }
-    return `${parseFloat(displayNum.toFixed(2))} ${units[unitIndex]}`;
+    return `${num.toFixed(2)} ${units[unitIndex]}`;
 }
 
 // =================================================================
-// STEP 4: ゲームデータの保存と読み込み (resetGame 함수 수정)
+// STEP 4: 게임 데이터 저장 및 불러오기 (localStorage)
+// 브라우저의 localStorage를 사용하여 게임 진행 상황을 저장하고 불러옵니다. [span_0](start_span)[span_0](end_span)[span_1](start_span)[span_1](end_span)[span_2](start_span)[span_2](end_span)
 // =================================================================
 
-function saveGame() { try { localStorage.setItem('webBeggarSave', JSON.stringify(gameState)); } catch (e) { console.error("保存失敗:", e); } }
+function saveGame() {
+    try {
+        localStorage.setItem('webBeggarSave', JSON.stringify(gameState));
+    } catch (e) {
+        console.error("저장에 실패했습니다.", e);
+    }
+}
+
 function loadGame() {
     const savedGame = localStorage.getItem('webBeggarSave');
     if (savedGame) {
         const loadedState = JSON.parse(savedGame);
-        const offlineTime = Date.now() - (loadedState.lastUpdate || Date.now());
-        const offlineGold = (loadedState.goldPerSecond || 0) * (offlineTime / 1000);
-        gameState = { ...gameState, ...loadedState, floatingTexts: [], particles: [], randomItems: [], showResetConfirm: false, characterAnimation: { isAnimating: false, duration: 0, maxDuration: 15 } };
+        // 불러온 데이터로 현재 상태를 덮어씁니다.
+        // 단, lastUpdate는 현재 시간으로 초기화하여 오프라인 보상 계산에 사용합니다.
+        const offlineTime = Date.now() - loadedState.lastUpdate;
+        const offlineGold = loadedState.goldPerSecond * (offlineTime / 1000);
+        
+        gameState = loadedState;
         gameState.lastUpdate = Date.now();
-        if (offlineGold > 0) { alert(`オフライン中に ${formatNumber(offlineGold)} ゴールドを獲得！`); gameState.gold += offlineGold; }
-        recalculateAll();
+
+        if (offlineGold > 0) {
+            alert(`미접속 시간 동안 ${formatNumber(offlineGold)} 골드를 획득했습니다!`);
+            gameState.gold += offlineGold;
+        }
+        
+        recalculateGPS(); // GPS를 다시 계산합니다.
         return true;
     }
     return false;
 }
-// resetGame 함수에서 confirm 제거
+
 function resetGame() {
-    localStorage.removeItem('webBeggarSave');
-    window.location.reload();
+    if (confirm("정말로 모든 진행 상황을 초기화하시겠습니까?")) {
+        localStorage.removeItem('webBeggarSave');
+        // 페이지를 새로고침하여 게임을 처음부터 시작합니다.
+        window.location.reload();
+    }
 }
 
 // =================================================================
-// STEP 5: 画面描画 (리셋 확인 창 그리기 추가)
+// STEP 5: 렌더링 (화면 그리기)
+// Canvas에 게임의 모든 시각적 요소를 그립니다.
 // =================================================================
 
+// 공통 UI 요소 그리기
 function drawUIFrame(title) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const bgGradient = ctx.createLinearGradient(0, 0, 0, 700);
-    bgGradient.addColorStop(0, '#e3f2fd');
-    bgGradient.addColorStop(1, '#bbdefb');
-    ctx.fillStyle = bgGradient;
+    ctx.fillStyle = '#f0e6d2';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    ctx.fillRect(0, 0, canvas.width, 60);
+    // 상단 정보 패널
+    ctx.fillStyle = '#5d4037';
+    ctx.fillRect(0, 0, canvas.width, 50);
     ctx.fillStyle = '#fff';
-    ctx.font = '15px Meiryo, sans-serif';
+    ctx.font = '14px Malgun Gothic';
     ctx.textAlign = 'left';
-    ctx.fillText(`ゴールド: ${formatNumber(gameState.gold)}`, 10, 25);
-    ctx.fillText(`クリック毎: ${formatNumber(gameState.goldPerClick)}`, 10, 45);
-    ctx.textAlign = 'right';
-    ctx.fillText(`秒間: ${formatNumber(gameState.goldPerSecond)}`, canvas.width - 10, 45);
+    ctx.fillText(`골드: ${formatNumber(gameState.gold)}`, 10, 20);
+    ctx.fillText(`클릭당: ${formatNumber(gameState.goldPerClick)}`, 10, 40);
+    ctx.fillText(`초당: ${formatNumber(gameState.goldPerSecond)}`, 150, 40);
 
-    const tabs = ['社長', 'バイト', '資産', 'ホーム'];
-    const tabKeys = ['ceo', 'alba', 'asset', 'main'];
+    // 하단 네비게이션 탭
+    const tabs = ['사장거지', '알바고용', '자산', '초기화'];
     tabs.forEach((tab, i) => {
-        const tabX = i * 100;
-        const isActive = gameState.currentScreen === tabKeys[i];
-        const tabGradient = ctx.createLinearGradient(tabX, 650, tabX, 700);
-        if (isActive) {
-            tabGradient.addColorStop(0, '#ffb74d');
-            tabGradient.addColorStop(1, '#ff9800');
-        } else {
-            tabGradient.addColorStop(0, '#90a4ae');
-            tabGradient.addColorStop(1, '#607d8b');
-        }
-        ctx.fillStyle = tabGradient;
-        ctx.fillRect(tabX, 650, 100, 50);
+        ctx.fillStyle = gameState.currentScreen === tab.toLowerCase().replace(' ', '')? '#a1887f' : '#795548';
+        ctx.fillRect(i * 100, 650, 100, 50);
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 16px Meiryo, sans-serif';
+        ctx.font = '16px Malgun Gothic';
         ctx.textAlign = 'center';
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        ctx.shadowBlur = 3;
-        ctx.shadowOffsetY = 2;
-        ctx.fillText(tab, tabX + 50, 680);
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetY = 0;
+        ctx.fillText(tab, i * 100 + 50, 680);
     });
 
+    // 현재 화면 타이틀
     ctx.fillStyle = '#3e2723';
-    ctx.font = 'bold 24px Meiryo, sans-serif';
+    ctx.font = 'bold 20px Malgun Gothic';
     ctx.textAlign = 'center';
-    ctx.fillText(title, canvas.width / 2, 95);
+    ctx.fillText(title, canvas.width / 2, 80);
 }
 
+// 메인 화면 그리기
 function drawMainScreen() {
-    drawUIFrame("ウェブ乞食");
-    
-    ctx.fillStyle = '#e57373';
-    ctx.fillRect(340, 75, 50, 25);
-    ctx.fillStyle = '#fff';
-    ctx.font = '12px Meiryo, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('リセット', 365, 92);
-
-    ctx.save();
-    if (gameState.characterAnimation.isAnimating) {
-        const progress = gameState.characterAnimation.duration / gameState.characterAnimation.maxDuration;
-        const scale = 1 + 0.1 * Math.sin(progress * Math.PI);
-        const scaleX = scale;
-        const scaleY = 2.0 - scale;
-        ctx.translate(200, 450);
-        ctx.scale(scaleX, scaleY);
-        ctx.translate(-200, -450);
-    }
-    
-    drawCharacter();
-    
-    ctx.restore();
-    
-    ctx.fillStyle = '#3e2723';
-    ctx.font = 'bold 24px Meiryo, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText("クリックしてお金を稼ごう！", canvas.width / 2, 200);
-
-    drawRandomItems();
-    drawParticles();
-    drawFloatingTexts();
-
-    // 리셋 확인 창 그리기
-    if (gameState.showResetConfirm) {
-        drawResetConfirm();
-    }
-}
-
-function drawCharacter() {
-    const level = gameState.ceoLevel;
+    drawUIFrame("Web Beggar");
+    // 사장 거지 캐릭터 (B급 감성)
     ctx.strokeStyle = '#3e2723';
     ctx.lineWidth = 3;
-    if (level >= 20) {
-        ctx.fillStyle = '#424242';
-        ctx.beginPath();
-        ctx.moveTo(200, 300); ctx.lineTo(170, 450); ctx.lineTo(230, 450); ctx.closePath();
-        ctx.fill(); ctx.stroke();
-        ctx.fillStyle = 'white';
-        ctx.beginPath();
-        ctx.moveTo(200, 300); ctx.lineTo(190, 350); ctx.lineTo(210, 350); ctx.closePath();
-        ctx.fill();
-    } else {
-        ctx.beginPath(); ctx.moveTo(200, 300); ctx.lineTo(180, 450); ctx.lineTo(220, 450); ctx.closePath(); ctx.stroke();
-    }
-    ctx.beginPath(); ctx.arc(200, 270, 40, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(190, 265, 3, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(210, 265, 3, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(200, 280, 15, 0, Math.PI); ctx.stroke();
-
-    if (level >= 5) { ctx.fillStyle = 'black'; ctx.fillRect(180, 260, 40, 10); }
-    if (level >= 10) { ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(200, 310, 15, 0.2 * Math.PI, 0.8 * Math.PI); ctx.stroke(); }
-    if (level >= 30) { ctx.fillStyle = '#5D4037'; ctx.fillRect(170, 230, 60, 10); ctx.fillRect(180, 210, 40, 20); }
+    // 몸통
+    ctx.beginPath();
+    ctx.moveTo(200, 300);
+    ctx.lineTo(180, 450);
+    ctx.lineTo(220, 450);
+    ctx.closePath();
+    ctx.stroke();
+    // 머리
+    ctx.beginPath();
+    ctx.arc(200, 270, 40, 0, Math.PI * 2);
+    ctx.stroke();
+    // 눈
+    ctx.beginPath();
+    ctx.arc(190, 265, 3, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(210, 265, 3, 0, Math.PI * 2);
+    ctx.stroke();
+    // 입
+    ctx.beginPath();
+    ctx.arc(200, 280, 15, 0, Math.PI);
+    ctx.stroke();
+    
+    ctx.fillStyle = '#3e2723';
+    ctx.font = '24px Malgun Gothic';
+    ctx.fillText("클릭해서 돈 벌기!", canvas.width / 2, 200);
 }
 
+// 업그레이드 패널 그리기 (공용)
 function drawUpgradePanel(title, items, type) {
     drawUIFrame(title);
     items.forEach((item, i) => {
-        const y = 110 + i * 60;
-        const itemGradient = ctx.createLinearGradient(10, y, 380, y);
-        itemGradient.addColorStop(0, '#eceff1');
-        itemGradient.addColorStop(1, '#cfd8dc');
-        ctx.fillStyle = itemGradient;
+        const y = 100 + i * 60;
+        ctx.fillStyle = '#d7ccc8';
         ctx.fillRect(10, y, 380, 55);
         
         ctx.fillStyle = '#3e2723';
-        ctx.font = '16px Meiryo, sans-serif';
+        ctx.font = '16px Malgun Gothic';
         ctx.textAlign = 'left';
 
-        let level = 0, cost = 0, currentEffect = "";
+        let level = 0;
+        let cost = 0;
+        let currentEffect = "";
+
         if (type === 'ceo') {
-            level = gameState.ceoLevel; cost = CEO_CONFIG.baseCost * Math.pow(CEO_CONFIG.costMultiplier, level - 1);
-            currentEffect = `クリックパワー: ${formatNumber(gameState.goldPerClick)}`;
+            level = gameState.ceoLevel;
+            cost = CEO_CONFIG.baseCost * Math.pow(CEO_CONFIG.costMultiplier, level - 1);
+            currentEffect = `클릭 파워: ${formatNumber(gameState.goldPerClick)}`;
         } else if (type === 'alba') {
-            const albaState = gameState.albas.find(a => a.id === item.id); level = albaState ? albaState.level : 0;
+            const albaState = gameState.albas.find(a => a.id === item.id);
+            level = albaState? albaState.level : 0;
             cost = item.baseCost * Math.pow(item.costMultiplier, level);
-            const currentGps = level > 0 ? item.baseGps * level * Math.pow(1.05, level - 1) : 0;
-            currentEffect = `毎秒 ${formatNumber(currentGps)} ゴールド`;
+            const currentGps = level > 0? item.baseGps * level * Math.pow(1.1, level-1) : 0;
+            currentEffect = `초당 ${formatNumber(currentGps)} 골드`;
         } else if (type === 'asset') {
-            const ownedCount = gameState.assets.filter(a => a.id === item.id).length; level = ownedCount;
+            const ownedCount = gameState.assets.filter(a => a.id === item.id).length;
+            level = ownedCount;
             cost = item.price;
             const totalValue = gameState.assets.filter(a => a.id === item.id).reduce((sum, a) => sum + a.currentValue, 0);
-            currentEffect = `総資産価値: ${formatNumber(totalValue)}`;
+            currentEffect = `총 자산가치: ${formatNumber(totalValue)}`;
         }
 
         ctx.fillText(`${item.name} (Lv.${level})`, 20, y + 20);
-        ctx.font = '14px Meiryo, sans-serif';
+        ctx.font = '14px Malgun Gothic';
         ctx.fillText(currentEffect, 20, y + 40);
 
+        // 업그레이드/구매 버튼
         const canAfford = gameState.gold >= cost;
-        const btnGradient = ctx.createLinearGradient(250, y, 380, y);
-        if(canAfford) {
-            btnGradient.addColorStop(0, '#66bb6a'); btnGradient.addColorStop(1, '#43a047');
-        } else {
-            btnGradient.addColorStop(0, '#e0e0e0'); btnGradient.addColorStop(1, '#bdbdbd');
-        }
-        ctx.fillStyle = btnGradient;
+        ctx.fillStyle = canAfford? '#8d6e63' : '#bdbdbd';
         ctx.fillRect(250, y + 5, 130, 45);
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 14px Meiryo, sans-serif';
+        ctx.font = '14px Malgun Gothic';
         ctx.textAlign = 'center';
-        const buttonText = (type === 'alba' && level === 0) || type === 'asset' ? '購入' : 'アップグレード';
-        ctx.fillText(buttonText, 315, y + 23);
-        ctx.font = '14px Meiryo, sans-serif';
-        ctx.fillText(`¥ ${formatNumber(cost)}`, 315, y + 42);
-    });
-    drawParticles();
-}
+        const buttonText = (type === 'alba' && level === 0) |
 
-function drawRandomItems() {
-    gameState.randomItems.forEach(item => {
-        ctx.save();
-        const blink = Math.abs(Math.sin(Date.now() / 200));
-        ctx.globalAlpha = 0.7 + blink * 0.3;
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        ctx.shadowBlur = 10;
-
-        if (item.type === 'treasure') {
-            ctx.fillStyle = '#8D6E63';
-            ctx.fillRect(item.x - item.size / 2, item.y - item.size / 2, item.size, item.size);
-            ctx.fillStyle = '#795548';
-            ctx.fillRect(item.x - item.size / 2 - 5, item.y - item.size / 2 - 5, item.size + 10, 5);
-            ctx.fillStyle = '#FFC107';
-            ctx.fillRect(item.x - item.size / 2 - 2, item.y - item.size / 2, 4, item.size);
-            ctx.fillRect(item.x + item.size / 2 - 2, item.y - item.size / 2, 4, item.size);
-            ctx.fillRect(item.x - 2, item.y - 2, 4, 4);
-        } else if (item.type === 'trash') {
-            // 쓰레기 그리기 (쓰레기 봉투 모양으로 변경)
-            ctx.fillStyle = '#616161'; // 어두운 회색
-            ctx.strokeStyle = '#424242'; // 더 어두운 회색
-            ctx.lineWidth = 2;
-
-            ctx.beginPath();
-            ctx.moveTo(item.x - item.size / 2, item.y + item.size / 2);
-            ctx.quadraticCurveTo(item.x, item.y + item.size, item.x + item.size / 2, item.y + item.size / 2);
-            ctx.lineTo(item.x + item.size / 2.5, item.y - item.size / 3);
-            ctx.lineTo(item.x - item.size / 2.5, item.y - item.size / 3);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-
-            // 봉투 묶은 부분
-            ctx.beginPath();
-            ctx.moveTo(item.x - item.size / 2.5, item.y - item.size / 3);
-            ctx.quadraticCurveTo(item.x, item.y - item.size / 1.5, item.x + item.size / 2.5, item.y - item.size / 3);
-            ctx.stroke();
-        }
-        ctx.restore();
+| type === 'asset'? '구매' : '업그레이드';
+        ctx.fillText(buttonText, 315, y + 25);
+        ctx.fillText(`₩ ${formatNumber(cost)}`, 315, y + 45);
     });
 }
 
-// 리셋 확인 창 그리기 함수
-function drawResetConfirm() {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(50, 250, 300, 150);
-    
-    ctx.fillStyle = '#3e2723';
-    ctx.font = 'bold 20px Meiryo, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('本当にリセットしますか？', 200, 300);
-
-    // 예 버튼
-    ctx.fillStyle = '#4caf50';
-    ctx.fillRect(70, 330, 100, 50);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 18px Meiryo, sans-serif';
-    ctx.fillText('はい', 120, 360);
-
-    // 아니오 버튼
-    ctx.fillStyle = '#f44336';
-    ctx.fillRect(230, 330, 100, 50);
-    ctx.fillStyle = '#fff';
-    ctx.fillText('いいえ', 280, 360);
-}
-
 // =================================================================
-// STEP 6: ゲームロジックの更新 (変更なし)
+// STEP 6: 게임 로직 업데이트
+// 게임의 상태를 시간의 흐름에 따라 갱신합니다. (자동 수입, 자산 가치 상승 등)
 // =================================================================
 
-function recalculateGPC() { gameState.goldPerClick = 1 + (gameState.ceoLevel - 1) * CEO_CONFIG.powerPerLevel; }
 function recalculateGPS() {
     let totalGps = 0;
     gameState.albas.forEach(albaState => {
         const albaData = ALBA_DATA.find(a => a.id === albaState.id);
-        if (albaData && albaState.level > 0) { totalGps += albaData.baseGps * albaState.level * Math.pow(1.05, albaState.level - 1); }
+        if (albaData) {
+            // 레벨에 따른 보너스 적용 (예시)
+            totalGps += albaData.baseGps * albaState.level * Math.pow(1.1, albaState.level-1);
+        }
     });
     gameState.goldPerSecond = totalGps;
 }
-function recalculateAll() { recalculateGPC(); recalculateGPS(); }
-
-function createFloatingText(text, x, y, color = '#4caf50') { gameState.floatingTexts.push({ text, x, y, alpha: 1.0, life: 60, color }); }
-
-function createParticleBurst(x, y, count, type) {
-    for (let i = 0; i < count; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 3 + 1;
-        const particle = {
-            x, y,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
-            life: Math.random() * 60 + 30,
-            alpha: 1,
-            type: type,
-            size: type === 'coin' ? Math.random() * 5 + 2 : Math.random() * 8 + 4,
-            color: type === 'coin' ? `hsl(50, 100%, ${Math.random() * 30 + 50}%)` : `hsl(55, 100%, ${Math.random() * 30 + 70}%)`
-        };
-        gameState.particles.push(particle);
-    }
-}
-
-function spawnRandomItem() {
-    if (gameState.currentScreen !== 'main' || gameState.randomItems.length > 2) return;
-    if (Math.random() < 0.15) {
-        const type = Math.random() < 0.7 ? 'treasure' : 'trash';
-        const item = {
-            type: type,
-            x: Math.random() * 300 + 50,
-            y: Math.random() * 400 + 150,
-            size: 40,
-            life: 240
-        };
-        gameState.randomItems.push(item);
-    }
-}
 
 function update(deltaTime) {
-    if (gameState.goldPerSecond > 0) gameState.gold += gameState.goldPerSecond * (deltaTime / 1000);
+    // 초당 골드 획득
+    if (gameState.goldPerSecond > 0) {
+        gameState.gold += gameState.goldPerSecond * (deltaTime / 1000);
+    }
+
+    // 자산 가치 상승
     gameState.assets.forEach(asset => {
         const assetData = ASSET_DATA.find(a => a.id === asset.id);
-        if (assetData) asset.currentValue += asset.purchasePrice * assetData.valueIncreaseRate * (deltaTime / 1000);
-    });
-    gameState.floatingTexts = gameState.floatingTexts.filter(ft => ft.life > 0);
-    gameState.floatingTexts.forEach(ft => { ft.y -= 1; ft.life--; ft.alpha = ft.life / 60; });
-    if (gameState.characterAnimation.isAnimating) {
-        gameState.characterAnimation.duration--;
-        if (gameState.characterAnimation.duration <= 0) gameState.characterAnimation.isAnimating = false;
-    }
-    gameState.particles = gameState.particles.filter(p => p.life > 0);
-    gameState.particles.forEach(p => {
-        p.x += p.vx; p.y += p.vy; p.vy += 0.05;
-        p.life--; p.alpha = p.life / 60;
-    });
-    gameState.randomItems.forEach(item => item.life--);
-    gameState.randomItems = gameState.randomItems.filter(item => item.life > 0);
-}
-
-function drawFloatingTexts() {
-    gameState.floatingTexts.forEach(ft => {
-        ctx.save();
-        ctx.globalAlpha = ft.alpha;
-        ctx.fillStyle = ft.color;
-        ctx.font = 'bold 22px Meiryo, sans-serif';
-        ctx.shadowColor = 'black';
-        ctx.shadowBlur = 5;
-        ctx.textAlign = 'center';
-        ctx.fillText(ft.text, ft.x, ft.y);
-        ctx.restore();
-    });
-}
-
-function drawParticles() {
-    gameState.particles.forEach(p => {
-        ctx.save();
-        ctx.globalAlpha = p.alpha;
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        if (p.type === 'coin') {
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        } else {
-            ctx.moveTo(p.x, p.y - p.size);
-            for (let i = 0; i < 5; i++) {
-                ctx.lineTo(p.x + Math.cos((18 + i * 72) * Math.PI / 180) * p.size, p.y - Math.sin((18 + i * 72) * Math.PI / 180) * p.size);
-                ctx.lineTo(p.x + Math.cos((54 + i * 72) * Math.PI / 180) * p.size / 2, p.y - Math.sin((54 + i * 72) * Math.PI / 180) * p.size / 2);
-            }
-            ctx.closePath();
+        if (assetData) {
+            asset.currentValue += asset.purchasePrice * assetData.valueIncreaseRate * (deltaTime / 1000);
         }
-        ctx.fill();
-        ctx.restore();
     });
 }
 
 // =================================================================
-// STEP 7: ユーザー入力の処理 (리셋 확인 창 클릭 처리 추가)
+// STEP 7: 사용자 입력 처리
+// 플레이어의 클릭/탭 입력을 받아 게임 상태를 변경합니다.
 // =================================================================
 
 canvas.addEventListener('click', (event) => {
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
-    const x = (event.clientX - rect.left) * scaleX; const y = (event.clientY - rect.top) * scaleY;
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
 
-    // 리셋 확인 창이 떠 있을 때의 클릭 처리
-    if (gameState.showResetConfirm) {
-        // '예' 버튼 클릭
-        if (x > 70 && x < 170 && y > 330 && y < 380) {
-            resetGame();
-        }
-        // '아니오' 버튼 클릭
-        if (x > 230 && x < 330 && y > 330 && y < 380) {
-            gameState.showResetConfirm = false;
-        }
-        return; // 확인 창 외 다른 클릭은 무시
-    }
-
-    for (let i = gameState.randomItems.length - 1; i >= 0; i--) {
-        const item = gameState.randomItems[i];
-        const distance = Math.sqrt(Math.pow(x - item.x, 2) + Math.pow(y - item.y, 2));
-        if (distance < item.size / 2 + 10) {
-            if (item.type === 'treasure') {
-                const bonus = (gameState.goldPerSecond * 60) + (gameState.goldPerClick * 100);
-                gameState.gold += bonus;
-                createFloatingText(`+${formatNumber(bonus)}`, item.x, item.y, '#FFD700');
-                createParticleBurst(item.x, item.y, 30, 'star');
-            } else if (item.type === 'trash') {
-                const penalty = gameState.goldPerClick * 50;
-                gameState.gold = Math.max(0, gameState.gold - penalty);
-                createFloatingText(`-${formatNumber(penalty)}`, item.x, item.y, '#f44336');
-            }
-            gameState.randomItems.splice(i, 1);
-            saveGame();
-            return;
-        }
-    }
-
+    // 하단 네비게이션 탭 클릭 처리
     if (y >= 650 && y <= 700) {
         if (x >= 0 && x < 100) gameState.currentScreen = 'ceo';
         else if (x >= 100 && x < 200) gameState.currentScreen = 'alba';
         else if (x >= 200 && x < 300) gameState.currentScreen = 'asset';
-        else if (x >= 300 && x < 400) gameState.currentScreen = 'main';
+        else if (x >= 300 && x < 400) resetGame();
         return;
     }
 
+    // 화면별 클릭 처리
     switch (gameState.currentScreen) {
         case 'main':
-            // 리셋 버튼 클릭 시 확인 창 띄우기
-            if (x > 340 && x < 390 && y > 75 && y < 100) {
-                gameState.showResetConfirm = true;
-                return;
-            }
-            if (x > 150 && x < 250 && y > 230 && y < 450) {
-                const amount = gameState.goldPerClick;
-                gameState.gold += amount;
-                createFloatingText(`+${formatNumber(amount)}`, x, y - 30);
-                createParticleBurst(x, y - 50, 15, 'coin');
-                if (!gameState.characterAnimation.isAnimating) {
-                    gameState.characterAnimation.isAnimating = true;
-                    gameState.characterAnimation.duration = gameState.characterAnimation.maxDuration;
-                }
-                saveGame();
+            // 사장 거지 클릭
+            const dist = Math.sqrt(Math.pow(x - 200, 2) + Math.pow(y - 350, 2));
+            if (dist < 100) {
+                gameState.gold += gameState.goldPerClick;
             }
             break;
-        case 'ceo': handleUpgradeClick(x, y, [{...CEO_CONFIG, name: '社長ホームレス'}], 'ceo'); break;
-        case 'alba': handleUpgradeClick(x, y, ALBA_DATA, 'alba'); break;
-        case 'asset': handleUpgradeClick(x, y, ASSET_DATA, 'asset'); break;
+        case 'ceo':
+            handleUpgradeClick(x, y, [{...CEO_CONFIG, name: '사장 거지'}], 'ceo');
+            break;
+        case 'alba':
+            handleUpgradeClick(x, y, ALBA_DATA, 'alba');
+            break;
+        case 'asset':
+            handleUpgradeClick(x, y, ASSET_DATA, 'asset');
+            break;
     }
 });
 
 function handleUpgradeClick(x, y, items, type) {
     items.forEach((item, i) => {
-        const itemY = 110 + i * 60;
+        const itemY = 100 + i * 60;
+        // 업그레이드 버튼 영역 확인
         if (x >= 250 && x <= 380 && y >= itemY + 5 && y <= itemY + 50) {
-            let cost = 0;
-            let canAfford = false;
-            
             if (type === 'ceo') {
-                cost = CEO_CONFIG.baseCost * Math.pow(CEO_CONFIG.costMultiplier, gameState.ceoLevel - 1);
+                const cost = CEO_CONFIG.baseCost * Math.pow(CEO_CONFIG.costMultiplier, gameState.ceoLevel - 1);
                 if (gameState.gold >= cost) {
-                    gameState.gold -= cost; gameState.ceoLevel++; recalculateGPC(); canAfford = true;
+                    gameState.gold -= cost;
+                    gameState.ceoLevel++;
+                    gameState.goldPerClick += CEO_CONFIG.powerPerLevel * (gameState.ceoLevel-1); // 레벨당 파워 증가
+                    saveGame();
                 }
             } else if (type === 'alba') {
-                let albaState = gameState.albas.find(a => a.id === item.id); const level = albaState ? albaState.level : 0;
-                cost = item.baseCost * Math.pow(item.costMultiplier, level);
+                let albaState = gameState.albas.find(a => a.id === item.id);
+                if (!albaState) {
+                    albaState = { id: item.id, level: 0 };
+                    gameState.albas.push(albaState);
+                }
+                const cost = item.baseCost * Math.pow(item.costMultiplier, albaState.level);
                 if (gameState.gold >= cost) {
                     gameState.gold -= cost;
-                    if (!albaState) { gameState.albas.push({ id: item.id, level: 1 }); } else { albaState.level++; }
-                    recalculateGPS(); canAfford = true;
+                    albaState.level++;
+                    recalculateGPS();
+                    saveGame();
                 }
             } else if (type === 'asset') {
-                cost = item.price;
+                const cost = item.price;
                 if (gameState.gold >= cost) {
                     gameState.gold -= cost;
-                    gameState.assets.push({ id: item.id, purchasePrice: cost, currentValue: cost });
-                    canAfford = true;
+                    gameState.assets.push({
+                        id: item.id,
+                        purchasePrice: cost,
+                        currentValue: cost
+                    });
+                    saveGame();
                 }
-            }
-
-            if (canAfford) {
-                createParticleBurst(x, y, 20, 'star');
-                saveGame();
             }
         }
     });
 }
 
+
 // =================================================================
-// STEP 8: ゲームループの実行
+// STEP 8: 게임 루프 실행
+// 게임의 심장. update와 render 함수를 지속적으로 호출합니다.
 // =================================================================
 
 function gameLoop() {
@@ -625,28 +388,39 @@ function gameLoop() {
 
     update(deltaTime);
 
+    // 현재 화면에 맞는 렌더링 함수 호출
     switch (gameState.currentScreen) {
-        case 'main': drawMainScreen(); break;
-        case 'ceo': drawUpgradePanel("社長ホームレス強化", [{...CEO_CONFIG, name: '社長ホームレス'}], 'ceo'); break;
-        case 'alba': drawUpgradePanel("バイト雇用/管理", ALBA_DATA, 'alba'); break;
-        case 'asset': drawUpgradePanel("資産購入", ASSET_DATA, 'asset'); break;
-        default: drawMainScreen();
+        case 'main':
+            drawMainScreen();
+            break;
+        case 'ceo':
+            drawUpgradePanel("사장 거지 강화", [{...CEO_CONFIG, name: '사장 거지'}], 'ceo');
+            break;
+        case 'alba':
+            drawUpgradePanel("알바 고용/관리", ALBA_DATA, 'alba');
+            break;
+        case 'asset':
+            drawUpgradePanel("자산 매입", ASSET_DATA, 'asset');
+            break;
+        default:
+            drawMainScreen();
     }
 
     requestAnimationFrame(gameLoop);
 }
 
-// 이전에 있던 confirm()을 제거하고, loadGame()을 직접 호출하도록 변경
-if (localStorage.getItem('webBeggarSave')) {
-    loadGame();
-} else {
-    recalculateAll();
+// 게임 시작
+if (confirm("저장된 게임을 불러오시겠습니까?")) {
+    if (!loadGame()) {
+        alert("저장된 게임이 없습니다. 새로 시작합니다.");
+    }
 }
 
-setInterval(saveGame, 10000);
-setInterval(spawnRandomItem, 10000);
+// 초기 GPS 계산 및 게임 루프 시작
+recalculateGPS();
 gameLoop();
 
 </script>
 </body>
 </html>
+
